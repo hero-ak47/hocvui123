@@ -1,6 +1,18 @@
 // src/components/Learning/NumberLearning.jsx
 import { useState, useEffect, useRef } from 'react';
 import './Learning.css';
+// 1. Import tất cả file âm thanh
+import sound0 from '/assets/sounds/0.mp3';
+import sound1 from '/assets/sounds/1.mp3';
+import sound2 from '/assets/sounds/2.mp3';
+import sound3 from '/assets/sounds/3.mp3';
+import sound4 from '/assets/sounds/4.mp3';
+import sound5 from '/assets/sounds/5.mp3';
+import sound6 from '/assets/sounds/6.mp3';
+import sound7 from '/assets/sounds/7.mp3';
+import sound8 from '/assets/sounds/8.mp3';
+import sound9 from '/assets/sounds/9.mp3';
+
 
 const NumberLearning = ({ onBack, addCoins }) => {
     const [currentNumber, setCurrentNumber] = useState(0);
@@ -9,16 +21,16 @@ const NumberLearning = ({ onBack, addCoins }) => {
     const audioRef = useRef(null);
 
     const numbers = [
-        { number: 0, name: "KHÔNG", image: "🍩", color: "#718096", audio: "/assets/sounds/0.mp3" },
-        { number: 1, name: "MỘT", image: "🌞", color: "#f6ad55", audio: "/assets/sounds/1.mp3" },
-        { number: 2, name: "HAI", image: "🐦🐦", color: "#68d391", audio: "/assets/sounds/2.mp3" },
-        { number: 3, name: "BA", image: "🚗🚗🚗", color: "#4fd1c7", audio: "/assets/sounds/3.mp3" },
-        { number: 4, name: "BỐN", image: "🍀🍀🍀🍀", color: "#63b3ed", audio: "/assets/sounds/4.mp3" },
-        { number: 5, name: "NĂM", image: "⭐⭐⭐⭐⭐", color: "#b794f4", audio: "/assets/sounds/5.mp3" },
-        { number: 6, name: "SÁU", image: "🐝🐝🐝🐝🐝🐝", color: "#f687b3", audio: "/assets/sounds/6.mp3" },
-        { number: 7, name: "BẢY", image: "🌈🌈🌈🌈🌈🌈🌈", color: "#f6ad55", audio: "/assets/sounds/7.mp3" },
-        { number: 8, name: "TÁM", image: "🐙🐙🐙🐙🐙🐙🐙🐙", color: "#68d391", audio: "/assets/sounds/8.mp3" },
-        { number: 9, name: "CHÍN", image: "🎈🎈🎈🎈🎈🎈🎈🎈🎈", color: "#4299e1", audio: "/assets/sounds/9.mp3" }
+        { number: 0, name: "KHÔNG", image: "🍩", color: "#718096", audio: sound0 },
+        { number: 1, name: "MỘT", image: "🌞", color: "#f6ad55", audio: sound1 },
+        { number: 2, name: "HAI", image: "🐦🐦", color: "#68d391", audio: sound2 },
+        { number: 3, name: "BA", image: "🚗🚗🚗", color: "#4fd1c7", audio: sound3 },
+        { number: 4, name: "BỐN", image: "🍀🍀🍀🍀", color: "#63b3ed", audio: sound4 },
+        { number: 5, name: "NĂM", image: "⭐⭐⭐⭐⭐", color: "#b794f4", audio: sound5 },
+        { number: 6, name: "SÁU", image: "🐝🐝🐝🐝🐝🐝", color: "#f687b3", audio: sound6 },
+        { number: 7, name: "BẢY", image: "🌈🌈🌈🌈🌈🌈🌈", color: "#f6ad55", audio: sound7 },
+        { number: 8, name: "TÁM", image: "🐙🐙🐙🐙🐙🐙🐙🐙", color: "#68d391", audio: sound8 },
+        { number: 9, name: "CHÍN", image: "🎈🎈🎈🎈🎈🎈🎈🎈🎈", color: "#4299e1", audio: sound9 }
     ];
 
     const playNumberSound = () => {
@@ -189,16 +201,7 @@ const NumberLearning = ({ onBack, addCoins }) => {
                     </button>
                 </div>
 
-                <div className="learning-tips">
-                    <h3>💡 Mẹo học số:</h3>
-                    <ul>
-                        <li>Nhấn vào số để chọn nhanh</li>
-                        <li>Nhấn nút âm thanh để nghe đọc số</li>
-                        <li>Quan sát hình ảnh tương ứng với số lượng</li>
-                        <li>Hoàn thành tất cả số để nhận 50 xu!</li>
-                        <li>Mỗi số có âm thanh riêng để dễ nhớ</li>
-                    </ul>
-                </div>
+
             </div>
 
             <div className="achievements">

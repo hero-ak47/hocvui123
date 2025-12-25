@@ -1,9 +1,20 @@
 // src/components/MathGame/MathRaceGame.jsx
 import { useState, useEffect } from 'react';
 import './MathRace.css';
+import { useGameStats } from '/src/Stores/useGameStats'; // Thêm import store
 
 const MathRaceGame = ({ onBack, addCoins, userData }) => {
-    const [gameState, setGameState] = useState('setup'); // setup, playing, finished
+    // Thêm các action từ store
+    const {
+        incrementGamesPlayed,
+        recordAnswer,
+        updateStreak,
+        addRaceWin,
+        addCoins: addCoinsToStats,
+        recordMathRaceGame  // THÊM
+    } = useGameStats();
+
+    const [gameState, setGameState] = useState('setup');
     const [totalQuestions, setTotalQuestions] = useState(5);
     const [currentQuestion, setCurrentQuestion] = useState(0);
     const [score, setScore] = useState(0);
@@ -29,7 +40,6 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
             correctAnswer = a - b;
         }
 
-        // Tạo các đáp án sai
         const answers = [correctAnswer];
         while (answers.length < 4) {
             const wrongAnswer = Math.floor(Math.random() * 11);
@@ -38,7 +48,6 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
             }
         }
 
-        // Trộn đáp án
         const shuffledAnswers = answers.sort(() => Math.random() - 0.5);
 
         setQuestion({
@@ -52,11 +61,16 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
     };
 
     const startGame = () => {
+        // Cập nhật thống kê khi bắt đầu game
+        incrementGamesPlayed();
+        updateStreak();
+
         setGameState('playing');
         setCurrentQuestion(0);
         setScore(0);
         setPlayerPosition(0);
         setCatPosition(0);
+        setSelectedAnswer(null);
         setGameResult(null);
         generateQuestion();
     };
@@ -67,10 +81,17 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
         setSelectedAnswer(answer);
 
         setTimeout(() => {
-            if (answer === question.correctAnswer) {
+            const isCorrect = answer === question.correctAnswer;
+
+            // Ghi nhận kết quả vào store
+            recordAnswer(isCorrect);
+
+            if (isCorrect) {
                 setScore(prev => prev + 1);
                 setPlayerPosition(prev => prev + 1);
+                // Cập nhật cả props và store
                 addCoins(10);
+                addCoinsToStats(10);
             } else {
                 setCatPosition(prev => prev + 1);
             }
@@ -90,15 +111,28 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
         setGameState('finished');
 
         let result = '';
+        let coinsWon = 0;
+
         if (playerPosition > catPosition) {
             result = 'win';
-            addCoins(50);
+            coinsWon = 50;
+            // Ghi nhận chiến thắng trận đua
+            addRaceWin();
         } else if (playerPosition < catPosition) {
             result = 'lose';
+            coinsWon = 0;
         } else {
             result = 'draw';
-            addCoins(20);
+            coinsWon = 20;
         }
+
+        // Cập nhật xu thưởng
+        if (coinsWon > 0) {
+            addCoins(coinsWon);
+            addCoinsToStats(coinsWon);
+        }
+
+        recordMathRaceGame(result, totalQuestions, score, coinsWon);
 
         setGameResult(result);
     };
@@ -112,10 +146,14 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
                         // Hết thời gian, mèo tiến lên
                         setCatPosition(prev => prev + 1);
 
+                        // Ghi nhận câu trả lời sai
+                        recordAnswer(false);
+
                         if (currentQuestion + 1 >= totalQuestions) {
                             finishGame();
                         } else {
                             setCurrentQuestion(prev => prev + 1);
+                            setSelectedAnswer(null);
                             setTimeLeft(15);
                             generateQuestion();
                         }
@@ -236,7 +274,7 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
                                     if (selectedAnswer !== null) {
                                         if (answer === question.correctAnswer) {
                                             answerClass += ' correct';
-                                        } else if (answer === selectedAnswer) {
+                                        } else if (answer === selectedAnswer && answer !== question.correctAnswer) {
                                             answerClass += ' wrong';
                                         }
                                     }
@@ -255,17 +293,58 @@ const MathRaceGame = ({ onBack, addCoins, userData }) => {
                             </div>
                         </div>
 
+                        {/* Visual aid mới - KHÔNG HIỂN THỊ ĐÁP ÁN TRƯỚC */}
                         <div className="visual-aid">
-                            <div className="visual-numbers">
-                                {question && Array.from({ length: question.a }).map((_, i) => (
-                                    <span key={`a-${i}`} className="visual-item">⭐</span>
-                                ))}
-                                <span className="visual-operator">{question?.operator}</span>
-                                {question && Array.from({ length: question.b }).map((_, i) => (
-                                    <span key={`b-${i}`} className="visual-item">⭐</span>
-                                ))}
-                                <span className="visual-equals">=</span>
-                                <span className="visual-result">{question?.correctAnswer}</span>
+                            <div className="visual-explanation">
+                                <div className="visual-row">
+                                    <div className="visual-group">
+                                        <span className="visual-label">Số thứ nhất:</span>
+                                        <div className="visual-items">
+                                            {question && Array.from({ length: question.a }).map((_, i) => (
+                                                <span key={`a-${i}`} className="visual-item">🍎</span>
+                                            ))}
+                                        </div>
+                                        <span className="visual-count">({question?.a})</span>
+                                    </div>
+
+                                    <div className="visual-operator">{question?.operator}</div>
+
+                                    <div className="visual-group">
+                                        <span className="visual-label">Số thứ hai:</span>
+                                        <div className="visual-items">
+                                            {question && Array.from({ length: question.b }).map((_, i) => (
+                                                <span key={`b-${i}`} className="visual-item">🍎</span>
+                                            ))}
+                                        </div>
+                                        <span className="visual-count">({question?.b})</span>
+                                    </div>
+
+                                    <div className="visual-equals">=</div>
+
+                                    <div className="visual-group">
+                                        <span className="visual-label">Kết quả:</span>
+                                        <div className="visual-result-placeholder">
+                                            {selectedAnswer !== null ? (
+                                                <span className="visual-result-correct">
+                                                    {question?.correctAnswer}
+                                                </span>
+                                            ) : (
+                                                <span className="visual-result-question">
+                                                    ?
+                                                    <span className="hint-text">(chọn đáp án)</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {question && (
+                                    <div className="visual-tip">
+                                        {question.operator === '+'
+                                            ? `Cộng ${question.a} và ${question.b} lại với nhau`
+                                            : `Lấy ${question.a} trừ đi ${question.b}`}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

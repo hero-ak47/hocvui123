@@ -1,29 +1,73 @@
 // src/components/Stats/Statistics.jsx
 import './Stats.css';
+import { useGameStats } from '/src/Stores/useGameStats';
 
 const Statistics = ({ onBack, userData }) => {
-    // Dữ liệu mẫu
-    const stats = {
-        gamesPlayed: 24,
-        totalCoins: userData.coins,
-        correctAnswers: 156,
-        totalAnswers: 200,
-        learningProgress: 80,
-        currentStreak: 7,
-        bestStreak: 12,
-        achievements: [
-            { id: 1, name: 'Học giỏi', icon: '⭐', unlocked: true, description: 'Trả lời đúng 50 câu' },
-            { id: 2, name: 'Nhanh tay', icon: '⚡', unlocked: true, description: 'Trả lời trong 5 giây' },
-            { id: 3, name: 'Toán thủ', icon: '🧮', unlocked: false, description: 'Hoàn thành 100 câu' },
-            { id: 4, name: 'Master toán', icon: '👑', unlocked: false, description: 'Trả lời đúng 200 câu' },
-            { id: 5, name: 'Chăm chỉ', icon: '💪', unlocked: true, description: 'Chơi 7 ngày liên tiếp' },
-            { id: 6, name: 'Bàn tay vàng', icon: '✋', unlocked: true, description: 'Hoàn thành Toán tay' },
-            { id: 7, name: 'Đua vô địch', icon: '🏆', unlocked: false, description: 'Thắng 10 trận đua' },
-            { id: 8, name: 'Học số siêu tốc', icon: '🔢', unlocked: true, description: 'Học hết số 0-9' },
-        ]
-    };
+    // Lấy dữ liệu từ store
+    const {
+        stats,
+        gameSpecificStats,
+        getHandMathProgress,
+        getMathRaceWinRate
+    } = useGameStats();
 
-    const accuracy = Math.round((stats.correctAnswers / stats.totalAnswers) * 100) || 0;
+    // Tính toán độ chính xác từ dữ liệu thực
+    const accuracy = stats.totalAnswers > 0
+        ? Math.round((stats.correctAnswers / stats.totalAnswers) * 100)
+        : 0;
+
+    // Thành tích dựa trên dữ liệu thực từ game
+    const achievements = [
+        {
+            id: 1,
+            name: 'Học giỏi',
+            icon: '⭐',
+            unlocked: stats.correctAnswers >= 50,
+            description: `Trả lời đúng ${stats.correctAnswers}/50 câu`
+        },
+        {
+            id: 2,
+            name: 'Nhanh tay',
+            icon: '⚡',
+            unlocked: false,
+            description: 'Trả lời trong 5 giây'
+        },
+        {
+            id: 3,
+            name: 'Toán thủ',
+            icon: '🧮',
+            unlocked: stats.correctAnswers >= 100,
+            description: `Hoàn thành ${stats.correctAnswers}/100 câu đúng`
+        },
+        {
+            id: 4,
+            name: 'Master toán',
+            icon: '👑',
+            unlocked: stats.correctAnswers >= 200,
+            description: `Trả lời đúng ${stats.correctAnswers}/200 câu`
+        },
+        {
+            id: 5,
+            name: 'Chăm chỉ',
+            icon: '💪',
+            unlocked: stats.currentStreak >= 7,
+            description: `Chơi ${stats.currentStreak}/7 ngày liên tiếp`
+        },
+        {
+            id: 6,
+            name: 'Bàn tay vàng',
+            icon: '✋',
+            unlocked: gameSpecificStats?.handMath?.correctAnswers >= 50,
+            description: `Hoàn thành ${gameSpecificStats?.handMath?.correctAnswers || 0}/50 câu toán tay`
+        },
+        {
+            id: 7,
+            name: 'Đua vô địch',
+            icon: '🏆',
+            unlocked: gameSpecificStats?.mathRace?.wins >= 10,
+            description: `Thắng ${gameSpecificStats?.mathRace?.wins || 0}/10 trận đua`
+        },
+    ];
 
     return (
         <div className="stats-container">
@@ -46,7 +90,7 @@ const Statistics = ({ onBack, userData }) => {
                         <div className="stat-card primary">
                             <div className="stat-icon">💰</div>
                             <div className="stat-content">
-                                <div className="stat-value">{stats.totalCoins}</div>
+                                <div className="stat-value">{userData.coins || 0}</div>
                                 <div className="stat-label">Tổng xu</div>
                             </div>
                         </div>
@@ -54,7 +98,7 @@ const Statistics = ({ onBack, userData }) => {
                         <div className="stat-card success">
                             <div className="stat-icon">🎮</div>
                             <div className="stat-content">
-                                <div className="stat-value">{stats.gamesPlayed}</div>
+                                <div className="stat-value">{stats.gamesPlayed || 0}</div>
                                 <div className="stat-label">Lần chơi</div>
                             </div>
                         </div>
@@ -70,7 +114,7 @@ const Statistics = ({ onBack, userData }) => {
                         <div className="stat-card info">
                             <div className="stat-icon">🔥</div>
                             <div className="stat-content">
-                                <div className="stat-value">{stats.currentStreak}</div>
+                                <div className="stat-value">{stats.currentStreak || 0}</div>
                                 <div className="stat-label">Chuỗi ngày</div>
                             </div>
                         </div>
@@ -79,51 +123,94 @@ const Statistics = ({ onBack, userData }) => {
             </div>
 
             <div className="detailed-stats">
+
+
                 <div className="stats-card">
                     <h3>📈 Tiến độ học tập</h3>
                     <div className="progress-stats">
                         <div className="progress-item">
-                            <div className="progress-label">Học số 0-9</div>
+                            <div className="progress-label">
+                                <span className="progress-icon">🎯</span>
+                                Độ chính xác tổng
+                            </div>
                             <div className="progress-bar">
                                 <div
                                     className="progress-fill"
-                                    style={{ width: `${stats.learningProgress}%` }}
+                                    style={{
+                                        width: `${accuracy}%`,
+                                        background: 'linear-gradient(90deg, #667eea, #764ba2)'
+                                    }}
                                 ></div>
                             </div>
-                            <div className="progress-value">{stats.learningProgress}%</div>
+                            <div className="progress-value">{accuracy}%</div>
                         </div>
 
                         <div className="progress-item">
-                            <div className="progress-label">Câu đúng / Tổng</div>
+                            <div className="progress-label">
+                                <span className="progress-icon">✋</span>
+                                Toán tay chính xác
+                            </div>
                             <div className="progress-bar">
                                 <div
                                     className="progress-fill"
-                                    style={{ width: `${accuracy}%` }}
+                                    style={{
+                                        width: `${getHandMathProgress()}%`,
+                                        background: 'linear-gradient(90deg, #4ECDC4, #44A08D)'
+                                    }}
                                 ></div>
                             </div>
-                            <div className="progress-value">{stats.correctAnswers}/{stats.totalAnswers}</div>
+                            <div className="progress-value">{getHandMathProgress()}%</div>
+                        </div>
+
+                        <div className="progress-item">
+                            <div className="progress-label">
+                                <span className="progress-icon">🐱</span>
+                                Tỷ lệ thắng Math Race
+                            </div>
+                            <div className="progress-bar">
+                                <div
+                                    className="progress-fill"
+                                    style={{
+                                        width: `${getMathRaceWinRate()}%`,
+                                        background: 'linear-gradient(90deg, #FF6B6B, #EE5A52)'
+                                    }}
+                                ></div>
+                            </div>
+                            <div className="progress-value">{getMathRaceWinRate()}%</div>
                         </div>
                     </div>
                 </div>
+            </div>
 
+            {/* CHI TIẾT TỪNG GAME */}
+            <div className="game-details">
                 <div className="stats-card">
-                    <h3>🏆 Thành tích</h3>
-                    <div className="achievements-grid">
-                        {stats.achievements.map(achievement => (
-                            <div
-                                key={achievement.id}
-                                className={`achievement ${achievement.unlocked ? 'unlocked' : 'locked'}`}
-                            >
-                                <div className="achievement-icon">{achievement.icon}</div>
-                                <div className="achievement-info">
-                                    <div className="achievement-name">{achievement.name}</div>
-                                    <div className="achievement-desc">{achievement.description}</div>
-                                </div>
-                                <div className="achievement-status">
-                                    {achievement.unlocked ? '✓' : '🔒'}
-                                </div>
+                    <h3>🎮 Chi tiết từng game</h3>
+                    <div className="game-stats-grid">
+                        {/* Math Race */}
+                        <div className="game-stat-item">
+                            <h4>🐱 Math Race</h4>
+                            <div className="game-stat-details">
+                                <div><strong>Trận đã chơi:</strong> {gameSpecificStats?.mathRace?.gamesPlayed || 0}</div>
+                                <div><strong>Thắng:</strong> {gameSpecificStats?.mathRace?.wins || 0}</div>
+                                <div><strong>Thua:</strong> {gameSpecificStats?.mathRace?.losses || 0}</div>
+                                <div><strong>Hòa:</strong> {gameSpecificStats?.mathRace?.draws || 0}</div>
+                                <div><strong>Tỷ lệ thắng:</strong> {getMathRaceWinRate()}%</div>
+                                <div><strong>Xu kiếm được:</strong> {gameSpecificStats?.mathRace?.totalCoinsEarned || 0}</div>
                             </div>
-                        ))}
+                        </div>
+
+                        {/* Hand Math */}
+                        <div className="game-stat-item">
+                            <h4>✋ Toán tay</h4>
+                            <div className="game-stat-details">
+                                <div><strong>Lần chơi:</strong> {gameSpecificStats?.handMath?.gamesPlayed || 0}</div>
+                                <div><strong>Câu đúng:</strong> {gameSpecificStats?.handMath?.correctAnswers || 0}/{gameSpecificStats?.handMath?.totalQuestions || 0}</div>
+                                <div><strong>Độ chính xác:</strong> {getHandMathProgress()}%</div>
+                                <div><strong>Điểm cao nhất:</strong> {gameSpecificStats?.handMath?.bestScore || 0}</div>
+                                <div><strong>Xu kiếm được:</strong> {gameSpecificStats?.handMath?.totalCoinsEarned || 0}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -144,8 +231,8 @@ const Statistics = ({ onBack, userData }) => {
                         <div className="reward-item upcoming">
                             <div className="reward-icon">🏆</div>
                             <div className="reward-info">
-                                <div className="reward-name">Chuỗi 10 ngày</div>
-                                <div className="reward-desc">Chơi liên tiếp 10 ngày</div>
+                                <div className="reward-name">Chuỗi {stats.currentStreak + 1} ngày</div>
+                                <div className="reward-desc">Chơi liên tiếp {stats.currentStreak + 1} ngày</div>
                             </div>
                             <div className="reward-amount">+200 xu</div>
                         </div>
@@ -154,7 +241,7 @@ const Statistics = ({ onBack, userData }) => {
                             <div className="reward-icon">⭐</div>
                             <div className="reward-info">
                                 <div className="reward-name">Toán thủ</div>
-                                <div className="reward-desc">Hoàn thành 100 câu</div>
+                                <div className="reward-desc">Hoàn thành {Math.max(0, 100 - (stats.correctAnswers || 0))} câu nữa</div>
                             </div>
                             <div className="reward-amount">+500 xu</div>
                         </div>

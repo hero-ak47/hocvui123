@@ -1,7 +1,7 @@
 // src/components/Menu/MainMenu.jsx
 import './Menu.css';
 
-const MainMenu = ({ userData, onSelectScreen, onLogout }) => {
+const MainMenu = ({ userData, onSelectScreen, onLogout, onOpenAbout }) => {
     const menuItems = [
         {
             id: 'learning',
@@ -35,6 +35,31 @@ const MainMenu = ({ userData, onSelectScreen, onLogout }) => {
 
     return (
         <div className="menu-container">
+            {/* Thanh công cụ trên cùng */}
+            <div className="menu-toolbar">
+                <div className="toolbar-left">
+                    <button className="toolbar-btn" onClick={onOpenAbout}>
+                        <span className="toolbar-icon">👤</span>
+                        <span className="toolbar-text">Về Tôi</span>
+                    </button>
+
+                </div>
+                <div className="toolbar-center">
+                    <h1 className="app-title">🎮 Toán Học Vui Nhộn</h1>
+                </div>
+                <div className="toolbar-right">
+                    <button className="toolbar-btn" onClick={onLogout}>
+                        <span className="toolbar-icon">🚪</span>
+                        <span className="toolbar-text">Đăng Xuất</span>
+                    </button>
+                    <div className="toolbar-user">
+                        <span className="user-avatar-small">{userData.avatar}</span>
+                        <span className="user-name-small">{userData.username}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Thông tin người dùng */}
             <div className="user-info-card">
                 <div className="user-avatar">
                     <span className="avatar-icon">{userData.avatar}</span>
@@ -50,18 +75,24 @@ const MainMenu = ({ userData, onSelectScreen, onLogout }) => {
                             <span className="stat-icon">⭐</span>
                             <span className="stat-value">Cấp {userData.level}</span>
                         </div>
+                        <div className="stat-item">
+                            <span className="stat-icon">🎯</span>
+                            <span className="stat-value">{userData.streak || 0} ngày liên tiếp</span>
+                        </div>
                     </div>
                 </div>
-                <button onClick={onLogout} className="logout-btn">
-                    🚪
+                <button onClick={onOpenAbout} className="about-btn" title="Về Tôi">
+                    ℹ️
                 </button>
             </div>
 
+            {/* Thông điệp chào mừng */}
             <div className="welcome-message">
                 <h1>Chào Mừng Đến Với Thế Giới Toán Học!</h1>
                 <p>Chọn một trò chơi để bắt đầu học tập vui vẻ</p>
             </div>
 
+            {/* Lưới menu */}
             <div className="menu-grid">
                 {menuItems.map((item) => (
                     <button
@@ -78,17 +109,32 @@ const MainMenu = ({ userData, onSelectScreen, onLogout }) => {
                 ))}
             </div>
 
+            {/* Phần thưởng hàng ngày */}
             <div className="daily-bonus">
-                <h3>🎁 Phần Thưởng Hàng Ngày</h3>
+                <div className="bonus-header">
+                    <h3>🎁 Phần Thưởng Hàng Ngày</h3>
+                    <button className="bonus-info-btn" onClick={() => alert('Nhận xu mỗi ngày bạn đăng nhập!')}>
+                        ℹ️
+                    </button>
+                </div>
                 <div className="bonus-calendar">
                     {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                        <div key={day} className="bonus-day">
+                        <div
+                            key={day}
+                            className={`bonus-day ${day <= (userData.currentDay || 1) ? 'active' : ''}`}
+                        >
                             <span className="day-number">Ngày {day}</span>
                             <span className="day-reward">{day * 10} xu</span>
+                            {day <= (userData.currentDay || 1) && <div className="day-check">✓</div>}
                         </div>
                     ))}
                 </div>
+                <button className="claim-bonus-btn" onClick={() => alert('Nhận 10 xu hôm nay!')}>
+                    Nhận Phần Thưởng Hôm Nay
+                </button>
             </div>
+
+
 
             <div className="menu-footer">
                 <p>🎮 Toán Học Vui Nhộn - Dành cho trẻ tiền tiểu học</p>
