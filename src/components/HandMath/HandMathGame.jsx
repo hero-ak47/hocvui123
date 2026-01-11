@@ -25,6 +25,10 @@ export default function HandMathGame({ onBack, addCoins }) {
     const [timeLeft, setTimeLeft] = useState(15);
     const [cameraReady, setCameraReady] = useState(false);
 
+    // Cài đặt trò chơi mới
+    const [gameMode, setGameMode] = useState('both'); // 'addition', 'subtraction', 'both'
+    const [numberRange, setNumberRange] = useState('0-5'); // '0-5', '6-10', '0-10'
+
     // Hand tracking
     const [detectedHands, setDetectedHands] = useState(0);
     const [leftHandFingers, setLeftHandFingers] = useState(0);
@@ -49,29 +53,52 @@ export default function HandMathGame({ onBack, addCoins }) {
     // Thêm ref để theo dõi đã chấm điểm chưa
     const hasScoredRef = useRef(false);
 
-    // Tạo câu hỏi mới
-    const generateQuestion = () => {
-        const operators = ["+", "-"];
-        const op = operators[Math.floor(Math.random() * operators.length)];
-        let x, y, answer;
+    // Lấy phạm vi số dựa trên cài đặt
+    const getNumberRangeValues = () => {
+        switch (numberRange) {
+            case '0-5':
+                return { min: 0, max: 5 };
+            case '6-10':
+                return { min: 6, max: 10 };
+            case '0-10':
+            default:
+                return { min: 0, max: 10 };
+        }
+    };
 
-        if (op === "+") {
+    // Tạo câu hỏi mới dựa trên chế độ và phạm vi
+    const generateQuestion = () => {
+        const { min, max } = getNumberRangeValues();
+        let x, y, answer;
+        let selectedOperator = operator;
+
+        // Xác định toán tử dựa trên chế độ
+        if (gameMode === 'addition') {
+            selectedOperator = '+';
+        } else if (gameMode === 'subtraction') {
+            selectedOperator = '-';
+        } else if (gameMode === 'both') {
+            const operators = ["+", "-"];
+            selectedOperator = operators[Math.floor(Math.random() * operators.length)];
+        }
+
+        if (selectedOperator === "+") {
             do {
-                x = Math.floor(Math.random() * 11);
-                y = Math.floor(Math.random() * 11);
+                x = Math.floor(Math.random() * (max - min + 1)) + min;
+                y = Math.floor(Math.random() * (max - min + 1)) + min;
                 answer = x + y;
-            } while (answer > 10);
+            } while (answer < min || answer > max); // Kết quả phải nằm trong phạm vi
         } else {
             do {
-                x = Math.floor(Math.random() * 11);
-                y = Math.floor(Math.random() * 11);
-            } while (x < y);
+                x = Math.floor(Math.random() * (max - min + 1)) + min;
+                y = Math.floor(Math.random() * (max - min + 1)) + min;
+            } while (x - y < min || x - y > max || x < y); // Kết quả phải nằm trong phạm vi và không âm
             answer = x - y;
         }
 
         setA(x);
         setB(y);
-        setOperator(op);
+        setOperator(selectedOperator);
         setCorrectAnswer(answer);
         setTotalFingers(0);
         setLeftHandFingers(0);
@@ -89,35 +116,60 @@ export default function HandMathGame({ onBack, addCoins }) {
         hasScoredRef.current = false;
     };
 
-    // Phát hiện số ngón tay (giữ nguyên)
-    const detectFingers = (landmarks) => {
+    // Phát hiện số ngón tay - LOGIC CHÍNH XÁC HƠN
+    const detectFingers = (landmarks, handType) => {
         if (!landmarks || landmarks.length < 21) return 0;
 
-        const fingerTips = [4, 8, 12, 16, 20];
-        const fingerPips = [3, 6, 10, 14, 18];
+        // Chỉ số các điểm landmark
+        const fingerTips = [4, 8, 12, 16, 20];      // Ngón cái, trỏ, giữa, áp út, út
+        const fingerPips = [3, 6, 10, 14, 18];      // Khớp thứ hai
+        const fingerMCPs = [2, 5, 9, 13, 17];       // Khớp thứ ba
+
         let fingerCount = 0;
 
+        // Kiểm tra 4 ngón tay: trỏ, giữa, áp út, út (chỉ số từ 1 đến 4)
         for (let i = 1; i <= 4; i++) {
-            if (landmarks[fingerTips[i]].y < landmarks[fingerPips[i]].y - 0.05) {
+            const tip = landmarks[fingerTips[i]];
+            const pip = landmarks[fingerPips[i]];
+            const mcp = landmarks[fingerMCPs[i]];
+
+            // Ngón tay duỗi thẳng khi tip thấp hơn pip và pip thấp hơn mcp (trong hệ tọa độ y tăng xuống dưới)
+            const isExtended = tip.y < pip.y && pip.y < mcp.y;
+
+            // Thêm ngưỡng để tránh false positive
+            const extensionAmount = pip.y - tip.y;
+            if (isExtended && extensionAmount > 0.02) {
                 fingerCount++;
             }
         }
 
+        // Kiểm tra ngón cái (chỉ số 0)
         const thumbTip = landmarks[4];
         const thumbIP = landmarks[3];
+        const thumbMCP = landmarks[2];
         const indexMCP = landmarks[5];
-        const vectorX = thumbTip.x - indexMCP.x;
 
-        if (Math.abs(vectorX) > 0.1 || thumbTip.y < thumbIP.y - 0.05) {
+        // Tính góc hoặc vị trí ngón cái
+        const thumbExtended = thumbTip.y < thumbIP.y;
+        const thumbAwayFromHand = Math.abs(thumbTip.x - indexMCP.x) > 0.1;
+
+        if (thumbExtended || thumbAwayFromHand) {
             fingerCount++;
         }
 
         return Math.min(fingerCount, 5);
     };
 
+    // Xác định tay thực tế
     const determineRealHand = (landmarks) => {
         if (!landmarks || landmarks.length < 21) return "unknown";
-        return landmarks[4].x < landmarks[20].x ? "right" : "left";
+
+        // Dựa vào vị trí tương đối của ngón cái và ngón út
+        const thumbTip = landmarks[4];
+        const pinkyTip = landmarks[20];
+
+        // Trong hệ tọa độ ảnh gương
+        return thumbTip.x < pinkyTip.x ? "left" : "right";
     };
 
     // Bắt đầu trò chơi
@@ -146,7 +198,7 @@ export default function HandMathGame({ onBack, addCoins }) {
         hasScoredRef.current = false;
     };
 
-    // Kiểm tra đáp án - SỬA: Thêm kiểm tra đã chấm điểm chưa
+    // Kiểm tra đáp án
     const checkAnswer = (answer) => {
         // Kiểm tra xem đã chấm điểm cho câu này chưa
         if (hasScoredRef.current) {
@@ -181,8 +233,6 @@ export default function HandMathGame({ onBack, addCoins }) {
         // Đảm bảo reset ref trước khi chuyển câu
         hasScoredRef.current = false;
 
-        console.log(`Next: ${currentQuestion + 1}/${totalQuestions}`);
-
         if (currentQuestion + 1 >= totalQuestions) {
             finishGame();
         } else {
@@ -191,7 +241,7 @@ export default function HandMathGame({ onBack, addCoins }) {
         }
     };
 
-    // Xử lý timer suy nghĩ - SỬA: Thêm kiểm tra đã chấm điểm
+    // Xử lý timer suy nghĩ
     useEffect(() => {
         let timer;
         if (gameState === 'playing' && timeLeft > 0 && !isAnswerLocked) {
@@ -220,7 +270,7 @@ export default function HandMathGame({ onBack, addCoins }) {
         return () => timer && clearInterval(timer);
     }, [gameState, timeLeft, isAnswerLocked, stableAnswer]);
 
-    // Xử lý timer giữ ổn định - SỬA: Thêm kiểm tra đã chấm điểm
+    // Xử lý timer giữ ổn định
     useEffect(() => {
         let stabilityInterval;
         if (gameState === 'playing' && !isAnswerLocked && lastStableTotal !== null) {
@@ -267,17 +317,27 @@ export default function HandMathGame({ onBack, addCoins }) {
                     }
                 });
 
+                // Cài đặt để tăng độ chính xác
                 hands.setOptions({
                     maxNumHands: 2,
                     modelComplexity: 1,
-                    minDetectionConfidence: 0.6,
+                    minDetectionConfidence: 0.7,
                     minTrackingConfidence: 0.5,
                 });
 
                 hands.onResults((results) => {
                     const canvas = canvasRef.current;
+                    if (!canvas) return;
+
                     const ctx = canvas.getContext("2d");
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // Lưu trạng thái transform
+                    ctx.save();
+
+                    // Áp dụng chế độ gương cho canvas
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
 
                     if (results.image) {
                         ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
@@ -290,24 +350,55 @@ export default function HandMathGame({ onBack, addCoins }) {
                     if (results.multiHandLandmarks?.length > 0) {
                         for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                             const landmarks = results.multiHandLandmarks[i];
-                            const fingers = detectFingers(landmarks);
                             const handType = determineRealHand(landmarks);
-                            const color = handType === "left" ? "#FF6B6B" : "#4ECDC4";
+                            const fingers = detectFingers(landmarks, handType);
 
-                            if (handType === "left") leftFingers = fingers;
-                            else if (handType === "right") rightFingers = fingers;
+                            // Trong chế độ gương, đảo ngược hiển thị
+                            const displayHandType = handType === "left" ? "right" : "left";
+                            const color = displayHandType === "left" ? "#FF6B6B" : "#4ECDC4";
 
-                            drawConnectors(ctx, landmarks, HAND_CONNECTIONS, { color, lineWidth: 3 });
-                            drawLandmarks(ctx, landmarks, { color, lineWidth: 1, radius: 4 });
+                            if (displayHandType === "left") {
+                                leftFingers = fingers;
+                            } else if (displayHandType === "right") {
+                                rightFingers = fingers;
+                            }
+
+                            // Vẽ skeleton của bàn tay
+                            drawConnectors(ctx, landmarks, HAND_CONNECTIONS, {
+                                color: color,
+                                lineWidth: 4
+                            });
+
+                            // Vẽ các điểm landmark
+                            drawLandmarks(ctx, landmarks, {
+                                color: color,
+                                lineWidth: 2,
+                                radius: 5
+                            });
+
+                            // Hiển thị thông tin tay
+                            ctx.restore();
+                            ctx.save();
+                            ctx.translate(canvas.width, 0);
+                            ctx.scale(-1, 1);
 
                             ctx.fillStyle = color;
-                            ctx.font = "bold 16px Arial";
+                            ctx.font = "bold 16px 'Arial', sans-serif";
                             const wristX = landmarks[0].x * canvas.width;
-                            const wristY = landmarks[0].y * canvas.height;
-                            ctx.fillText(`${handType === "left" ? "Tay TRÁI" : "Tay PHẢI"}: ${fingers}`, wristX - 40, wristY - 15);
+                            const wristY = landmarks[0].y * canvas.height - 20;
+
+                            // Hiển thị thông tin tay
+                            ctx.fillText(
+                                `${displayHandType === "left" ? "Trái" : "Phải"}: ${fingers} ngón`,
+                                wristX - 30,
+                                wristY
+                            );
                         }
                         total = leftFingers + rightFingers;
                     }
+
+                    // Khôi phục transform
+                    ctx.restore();
 
                     setDetectedHands(results.multiHandLandmarks?.length || 0);
                     setLeftHandFingers(leftFingers);
@@ -320,7 +411,11 @@ export default function HandMathGame({ onBack, addCoins }) {
                 });
 
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "user"
+                    },
                     audio: false
                 });
 
@@ -348,7 +443,7 @@ export default function HandMathGame({ onBack, addCoins }) {
 
             } catch (error) {
                 console.error("Lỗi camera:", error);
-                setFeedback("❌ Không thể truy cập camera");
+                setFeedback("❌ Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập.");
             }
         };
 
@@ -363,13 +458,33 @@ export default function HandMathGame({ onBack, addCoins }) {
         };
     }, [gameState]);
 
+    // Lấy tên hiển thị cho chế độ
+    const getGameModeName = (mode) => {
+        switch (mode) {
+            case 'addition': return 'Chỉ phép CỘNG';
+            case 'subtraction': return 'Chỉ phép TRỪ';
+            case 'both': return 'Cả CỘNG và TRỪ';
+            default: return mode;
+        }
+    };
+
+    // Lấy tên hiển thị cho phạm vi
+    const getRangeName = (range) => {
+        switch (range) {
+            case '0-5': return 'Kết quả 0-5';
+            case '6-10': return 'Kết quả 6-10';
+            case '0-10': return 'Kết quả 0-10';
+            default: return range;
+        }
+    };
+
     return (
         <div className="app-container">
             <div className="game-header">
                 <button onClick={onBack} className="back-to-menu-btn">
                     ↩️ Quay về Menu
                 </button>
-                <h1 className="title">✋ Toán Học Từ 0 Đến 10</h1>
+                <h1 className="title">✋ Toán Học Bằng Tay</h1>
             </div>
 
             {gameState === 'setup' && (
@@ -377,6 +492,46 @@ export default function HandMathGame({ onBack, addCoins }) {
                     <div className="setup-card">
                         <h2>⚙️ Thiết Lập Trò Chơi</h2>
                         <div className="setup-options">
+                            <div className="option-group">
+                                <h3>Chọn chế độ toán học:</h3>
+                                <div className="mode-selector">
+                                    {[
+                                        { id: 'addition', name: 'Chỉ phép CỘNG', icon: '➕' },
+                                        { id: 'subtraction', name: 'Chỉ phép TRỪ', icon: '➖' },
+                                        { id: 'both', name: 'Cả CỘNG và TRỪ', icon: '➕➖' }
+                                    ].map(mode => (
+                                        <button
+                                            key={mode.id}
+                                            className={`mode-option ${gameMode === mode.id ? 'selected' : ''}`}
+                                            onClick={() => setGameMode(mode.id)}
+                                        >
+                                            <span className="mode-icon">{mode.icon}</span>
+                                            <span className="mode-name">{mode.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="option-group">
+                                <h3>Chọn phạm vi kết quả:</h3>
+                                <div className="range-selector">
+                                    {[
+                                        { id: '0-5', name: 'Kết quả 0-5', desc: 'Dễ' },
+                                        { id: '6-10', name: 'Kết quả 6-10', desc: 'Trung bình' },
+                                        { id: '0-10', name: 'Kết quả 0-10', desc: 'Khó' }
+                                    ].map(range => (
+                                        <button
+                                            key={range.id}
+                                            className={`range-option ${numberRange === range.id ? 'selected' : ''}`}
+                                            onClick={() => setNumberRange(range.id)}
+                                        >
+                                            <span className="range-name">{range.name}</span>
+                                            <span className="range-desc">{range.desc}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="option-group">
                                 <h3>Chọn số câu hỏi:</h3>
                                 <div className="question-selector">
@@ -392,8 +547,23 @@ export default function HandMathGame({ onBack, addCoins }) {
                                 </div>
                             </div>
 
+                            <div className="game-summary">
+                                <div className="summary-item">
+                                    <span className="summary-label">Chế độ:</span>
+                                    <span className="summary-value">{getGameModeName(gameMode)}</span>
+                                </div>
+                                <div className="summary-item">
+                                    <span className="summary-label">Kết quả:</span>
+                                    <span className="summary-value">{getRangeName(numberRange)}</span>
+                                </div>
+                                <div className="summary-item">
+                                    <span className="summary-label">Tổng câu:</span>
+                                    <span className="summary-value">{totalQuestions} câu</span>
+                                </div>
+                            </div>
+
                             <button onClick={startGame} className="start-game-btn">
-                                🎮 Bắt đầu chơi ({totalQuestions} câu)
+                                🎮 Bắt đầu chơi
                             </button>
                         </div>
                     </div>
@@ -401,153 +571,188 @@ export default function HandMathGame({ onBack, addCoins }) {
             )}
 
             {gameState === 'playing' && (
-                <div className="main-content">
-                    <div className="control-panel">
-                        <div className="game-info">
-                            <div className="info-card">
-                                <h3>📊 THỐNG KÊ</h3>
-                                <div className="stats">
-                                    <div className="stat">
-                                        <span className="stat-label">Câu hỏi</span>
-                                        <span className="stat-value">{currentQuestion + 1}/{totalQuestions}</span>
-                                    </div>
-                                    <div className="stat">
-                                        <span className="stat-label">Điểm số</span>
-                                        <span className="stat-value">{score}</span>
-                                    </div>
-                                    <div className="stat">
-                                        <span className="stat-label">Thời gian</span>
-                                        <span className={`stat-value ${timeLeft <= 5 ? 'time-warning' : ''}`}>
-                                            {timeLeft}s
-                                        </span>
-                                    </div>
+                <div className="playing-container">
+                    <div className="left-panel">
+                        <div className="question-section">
+                            <div className="question-header">
+                                <h3>CÂU HỎI #{currentQuestion + 1}</h3>
+                                <div className="mode-indicator">
+                                    <span className="mode-tag">{getGameModeName(gameMode)}</span>
+                                    <span className="range-tag">{getRangeName(numberRange)}</span>
                                 </div>
                             </div>
 
-                            <div className="question-card">
-                                <h3>❓ CÂU HỎI #{currentQuestion + 1} (0-10)</h3>
-                                <div className="math-question">
-                                    <span className="number">{a}</span>
-                                    <span className="operator">{operator}</span>
-                                    <span className="number">{b}</span>
-                                    <span className="equals">=</span>
-                                    <span className="answer">{totalFingers}</span>
+                            <div className="math-display">
+                                <div className="equation">
+                                    <div className="number-box">{a}</div>
+                                    <div className="operator-box">{operator}</div>
+                                    <div className="number-box">{b}</div>
+                                    <div className="equals-box">=</div>
+                                    <div className="answer-box">{totalFingers}</div>
                                 </div>
 
-                                <div className="hands-breakdown">
-                                    <div className={`hand-display ${leftHandFingers > 0 ? 'active' : 'inactive'}`}>
-                                        <span className="hand-icon">✋</span>
-                                        <span className="hand-label">Tay TRÁI:</span>
-                                        <span className="hand-count">{leftHandFingers}</span>
-                                    </div>
-                                    <div className="plus-sign">+</div>
-                                    <div className={`hand-display ${rightHandFingers > 0 ? 'active' : 'inactive'}`}>
-                                        <span className="hand-icon">✋</span>
-                                        <span className="hand-label">Tay PHẢI:</span>
-                                        <span className="hand-count">{rightHandFingers}</span>
-                                    </div>
-                                    <div className="equals-sign">=</div>
-                                    <div className="total-display">
-                                        <span className="total-label">Tổng:</span>
-                                        <span className="total-count">{totalFingers}</span>
-                                    </div>
-                                </div>
-
-                                <div className="stability-info">
-                                    <div className="stability-bar">
-                                        <div
-                                            className="stability-progress"
-                                            style={{ width: `${(stabilityTimer / 5) * 100}%` }}
-                                        ></div>
-                                    </div>
-                                    <div className="stability-text">
-                                        {isAnswerLocked ? (
-                                            <span className="locked">🔒 Đã chốt: {stableAnswer}</span>
-                                        ) : stabilityTimer > 0 ? (
-                                            <span className="counting">
-                                                ⏳ Giữ {totalFingers} ngón: {stabilityTimer}/5s
-                                            </span>
-                                        ) : (
-                                            <span className="waiting">👆 Giơ ngón tay và giữ yên</span>
-                                        )}
+                                <div className="hands-display">
+                                    <div className="hand-info">
+                                        <div className={`hand-card left ${leftHandFingers > 0 ? 'active' : ''}`}>
+                                            <div className="hand-icon">✋</div>
+                                            <div className="hand-details">
+                                                <div className="hand-label">Tay TRÁI</div>
+                                                <div className="hand-count">{leftHandFingers} ngón</div>
+                                            </div>
+                                        </div>
+                                        <div className="plus-operator">+</div>
+                                        <div className={`hand-card right ${rightHandFingers > 0 ? 'active' : ''}`}>
+                                            <div className="hand-icon">✋</div>
+                                            <div className="hand-details">
+                                                <div className="hand-label">Tay PHẢI</div>
+                                                <div className="hand-count">{rightHandFingers} ngón</div>
+                                            </div>
+                                        </div>
+                                        <div className="equals-operator">=</div>
+                                        <div className="total-card">
+                                            <div className="total-label">TỔNG</div>
+                                            <div className="total-count">{totalFingers} ngón</div>
+                                        </div>
                                     </div>
                                 </div>
-
-                                {showResult && feedback && (
-                                    <div className={`feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
-                                        {feedback}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="controls">
-                                <button
-                                    className="skip-btn"
-                                    onClick={nextQuestion}
-                                    disabled={isAnswerLocked}
-                                >
-                                    {isAnswerLocked ? '⏳ Đang chấm...' : '⏭️ Bỏ qua câu này'}
-                                </button>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="camera-section">
-                        <div className="camera-container">
-                            <video ref={videoRef} style={{ display: 'none' }} playsInline />
-                            <canvas ref={canvasRef} width="640" height="480" className="camera-canvas" />
+                        <div className="stats-section">
+                            <div className="stats-grid">
+                                <div className="stat-item">
+                                    <div className="stat-label">Câu hỏi</div>
+                                    <div className="stat-value">{currentQuestion + 1}/{totalQuestions}</div>
+                                </div>
+                                <div className="stat-item">
+                                    <div className="stat-label">Điểm số</div>
+                                    <div className="stat-value">{score}</div>
+                                </div>
+                                <div className="stat-item">
+                                    <div className="stat-label">Thời gian</div>
+                                    <div className={`stat-value ${timeLeft <= 5 ? 'time-warning' : ''}`}>
+                                        {timeLeft}s
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                            {!cameraReady && (
-                                <div className="camera-loading">
-                                    <div className="loading-spinner"></div>
-                                    <p>Đang khởi động camera...</p>
+                        <div className="feedback-section">
+                            <div className="stability-indicator">
+                                <div className="stability-header">
+                                    <span>⏳ Ổn định câu trả lời:</span>
+                                    <span className="stability-timer">{stabilityTimer}/5s</span>
+                                </div>
+                                <div className="stability-bar-container">
+                                    <div
+                                        className="stability-bar-fill"
+                                        style={{ width: `${(stabilityTimer / 5) * 100}%` }}
+                                    ></div>
+                                </div>
+                                <div className="stability-status">
+                                    {isAnswerLocked ? (
+                                        <span className="locked">🔒 Đã chốt: {stableAnswer}</span>
+                                    ) : stabilityTimer > 0 ? (
+                                        <span className="counting">Giữ {totalFingers} ngón...</span>
+                                    ) : (
+                                        <span className="waiting">👆 Giơ ngón tay và giữ yên</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {showResult && feedback && (
+                                <div className={`result-feedback ${isCorrect ? 'correct' : 'incorrect'}`}>
+                                    {feedback}
                                 </div>
                             )}
 
-                            <div className="finger-overlay">
-                                <div className="finger-count">
-                                    <span className="finger-label">TỔNG NGÓN TAY:</span>
-                                    <span className="finger-number">{totalFingers}</span>
+                            <button
+                                className="skip-button"
+                                onClick={nextQuestion}
+                                disabled={isAnswerLocked}
+                            >
+                                {isAnswerLocked ? '⏳ Đang chấm...' : '⏭️ Bỏ qua câu này'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="camera-panel">
+                        <div className="camera-wrapper">
+                            <div className="camera-header">
+                                <h4>🎥 Camera nhận diện</h4>
+                                <div className={`camera-status ${cameraReady ? 'ready' : 'loading'}`}>
+                                    {cameraReady ? '✅ Đã sẵn sàng' : '🔄 Đang khởi động...'}
                                 </div>
-                                <div className="hands-detail">
-                                    <div className="hand-detail">
-                                        <span className="hand-name">Tay phải:</span>
-                                        <span className="hand-fingers">{leftHandFingers}</span>
+                            </div>
+
+                            <div className="camera-view">
+                                <video
+                                    ref={videoRef}
+                                    style={{ display: 'none' }}
+                                    playsInline
+                                    className="camera-video"
+                                />
+                                <canvas
+                                    ref={canvasRef}
+                                    width="640"
+                                    height="480"
+                                    className="camera-canvas"
+                                />
+
+                                {!cameraReady && (
+                                    <div className="camera-loading">
+                                        <div className="loading-spinner"></div>
+                                        <p>Đang khởi động camera...</p>
                                     </div>
-                                    <div className="hand-detail">
-                                        <span className="hand-name">Tay trái:</span>
-                                        <span className="hand-fingers">{rightHandFingers}</span>
+                                )}
+
+                                <div className="camera-overlay">
+                                    <div className="overlay-finger-count">
+                                        <div className="overlay-label">TỔNG NGÓN TAY</div>
+                                        <div className="overlay-number">{totalFingers}</div>
+                                    </div>
+
+                                    <div className="timer-display">
+                                        <div className="timer-circle">
+                                            <div className="timer-text">{timeLeft}</div>
+                                            <div className="timer-label">giây</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="timer-overlay">
-                                <div className="timer-circle">
-                                    <span className="timer-text">{timeLeft}s</span>
-                                    <div
-                                        className="timer-progress"
-                                        style={{ transform: `rotate(${(1 - timeLeft / 15) * 360}deg)` }}
-                                    ></div>
+                            <div className="camera-info">
+                                <div className="hand-breakdown">
+                                    <div className="breakdown-item">
+                                        <span className="breakdown-label">Tay phải:</span>
+                                        <span className="breakdown-value">{leftHandFingers} ngón</span>
+                                    </div>
+                                    <div className="breakdown-item">
+                                        <span className="breakdown-label">Tay trái:</span>
+                                        <span className="breakdown-value">{rightHandFingers} ngón</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="finger-guide">
-                            <h4>🎯 HƯỚNG DẪN</h4>
-                            <div className="scoring-guide">
-                                <div className="score-example">
-                                    <div className="example">
-                                        <span className="example-icon">💰</span>
-                                        <span className="example-text">Mỗi câu đúng: <strong>+1 xu</strong></span>
-                                    </div>
-                                    <div className="example">
-                                        <span className="example-icon">🎯</span>
-                                        <span className="example-text">Phạm vi: <strong>0-10</strong></span>
-                                    </div>
-                                    <div className="example">
-                                        <span className="example-icon">🏆</span>
-                                        <span className="example-text">Tổng xu: <strong>{score}</strong></span>
-                                    </div>
+                        <div className="instructions-box">
+                            <h4>📋 Hướng dẫn nhanh</h4>
+                            <div className="instructions-list">
+                                <div className="instruction-item">
+                                    <span className="instruction-icon">👆</span>
+                                    <span className="instruction-text">Giơ ngón tay tương ứng với đáp án</span>
+                                </div>
+                                <div className="instruction-item">
+                                    <span className="instruction-icon">⏱️</span>
+                                    <span className="instruction-text">Giữ yên 5 giây để chốt đáp án</span>
+                                </div>
+                                <div className="instruction-item">
+                                    <span className="instruction-icon">💰</span>
+                                    <span className="instruction-text">Mỗi câu đúng: <strong>+1 xu</strong></span>
+                                </div>
+                                <div className="instruction-item">
+                                    <span className="instruction-icon">💡</span>
+                                    <span className="instruction-text">Đặt tay rõ ràng trước camera</span>
                                 </div>
                             </div>
                         </div>
@@ -564,6 +769,10 @@ export default function HandMathGame({ onBack, addCoins }) {
                         <h2 className="result-title">
                             {score === totalQuestions ? 'Xuất sắc!' : score >= totalQuestions * 0.7 ? 'Rất tốt!' : 'Cố gắng hơn nhé!'}
                         </h2>
+                        <div className="game-mode-display">
+                            <span className="mode-badge">{getGameModeName(gameMode)}</span>
+                            <span className="range-badge">{getRangeName(numberRange)}</span>
+                        </div>
                         <div className="final-stats">
                             <div className="final-stat">
                                 <span className="stat-label">Tổng câu:</span>
@@ -590,8 +799,8 @@ export default function HandMathGame({ onBack, addCoins }) {
             )}
 
             <footer className="footer">
-                <p>🎮 TOÁN HỌC 0-10 - Dùng ngón tay để tính toán</p>
-                <p className="footer-note">Mỗi câu đúng = 1 xu • Tổng câu: {totalQuestions} • Tự động nhận diện ngón tay</p>
+                <p>🎮 TOÁN HỌC BẰNG TAY - Dùng ngón tay để tính toán</p>
+                <p className="footer-note">Chế độ: {getGameModeName(gameMode)} • Kết quả: {getRangeName(numberRange)} • Tự động nhận diện ngón tay</p>
             </footer>
         </div>
     );

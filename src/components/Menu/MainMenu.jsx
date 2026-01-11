@@ -5,10 +5,10 @@ const MainMenu = ({ userData, onSelectScreen, onLogout, onOpenAbout }) => {
     const menuItems = [
         {
             id: 'learning',
-            title: '🎓 Học Số Từ 0-9',
-            description: 'Nhận biết chữ số, hình ảnh và âm thanh',
+            title: '🎓 Học Chữ Số & Hình Học',
+            description: 'Nhận biết chữ số, hình học và âm thanh',
             color: '#4299e1',
-            icon: '🔢'
+            icon: '🔢🔺'
         },
         {
             id: 'mathRace',
